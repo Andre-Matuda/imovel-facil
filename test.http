@@ -1,0 +1,67 @@
+### Listar (no projeto base devolve todos, sem paginação)
+GET http://localhost:8080/properties
+
+### Um imóvel
+GET http://localhost:8080/properties/7
+
+### Imóvel inexistente → 404
+GET http://localhost:8080/properties/999
+
+### Criar → 201
+POST http://localhost:8080/properties
+Content-Type: application/json
+
+{
+  "title": "Apartamento com varanda gourmet",
+  "description": "Perto do metrô Fradique Coutinho",
+  "type": "APARTMENT",
+  "city": "São Paulo",
+  "neighborhood": "Pinheiros",
+  "price": 4200.00,
+  "bedrooms": 2,
+  "area": 72.5
+}
+
+### Criar inválido → 400
+POST http://localhost:8080/properties
+Content-Type: application/json
+
+{"title": "", "type": "APARTMENT"}
+
+### Atualizar → 200
+PUT http://localhost:8080/properties/7
+Content-Type: application/json
+
+{
+  "title": "Apartamento reformado",
+  "description": "Atualizado pelo teste",
+  "type": "APARTMENT",
+  "city": "Rio de Janeiro",
+  "neighborhood": "Tijuca",
+  "price": 2900.00,
+  "bedrooms": 2,
+  "area": 70
+}
+
+### Excluir → 204
+DELETE http://localhost:8080/properties/7
+
+### ===== Diamante 03 (depois de implementar) =====
+
+### Página 2 com 5 itens
+GET http://localhost:8080/properties?page=2&size=5
+
+### Query by Example
+GET http://localhost:8080/properties/example?type=APARTMENT&city=são paulo&bedrooms=2
+
+### Specification
+GET http://localhost:8080/properties/search?title=varanda&minPrice=2000&maxPrice=6000&minBedrooms=2
+
+### Actuator
+GET http://localhost:8080/actuator/health
+
+###
+GET http://localhost:8080/actuator/info
+
+###
+GET http://localhost:8080/actuator/caches
