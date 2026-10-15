@@ -35,6 +35,9 @@ Para conferir o contrato, use o app: https://github.com/joaocarloslima/imovel-fa
 
 ## Equipe
 
-| Nome | RM |
-|------|----|
-|      |    |
+| Nome           | RM     |
+|----------------|--------|
+| Kaliel Aquino  | 567587 |
+| Andre Matuda   | 566733 |
+| Paulo Diedrich | 567618 |
+ 
