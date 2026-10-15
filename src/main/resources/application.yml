@@ -1,25 +1,20 @@
 spring:
-  cache:
-    cache-names: properties
   application:
     name: imovel-facil
-
-  datasource:
-    url: jdbc:h2:mem:imoveis
-
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    open-in-view: false
-
-server:
-  port: 8080
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,caches
+  endpoint:
+    health:
+      enabled: true
+    info:
+      enabled: true
+    caches:
+      enabled: true
+
 info:
   app:
     name: Imóvel Fácil API

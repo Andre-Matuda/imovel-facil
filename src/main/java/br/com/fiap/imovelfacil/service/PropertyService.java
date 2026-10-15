@@ -1,13 +1,14 @@
 package br.com.fiap.imovelfacil.service;
 
-import java.util.List;
-
+import java.math.BigDecimal;
 import br.com.fiap.imovelfacil.dto.PropertyRequest;
 import br.com.fiap.imovelfacil.model.Property;
-import br.com.fiap.imovelfacil.model.PropertyType;
 import br.com.fiap.imovelfacil.repository.PropertyRepository;
+import br.com.fiap.imovelfacil.specification.PropertySpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.ExampleMatcher;
@@ -24,13 +25,29 @@ public class PropertyService {
 
     private final PropertyRepository repository;
 
-    public List<Property> findAll() {
-        return repository.findAll();
+    public Page<Property> findAll(Pageable pageable) {
+        return repository.findAll(pageable);
+    }
+
+    public Page<Property> findByExample(Property probe, Pageable pageable) {
+        ExampleMatcher matcher = ExampleMatcher.matching()
+                .withIgnoreCase()
+                .withIgnoreNullValues()
+                .withStringMatcher(ExampleMatcher.StringMatcher.CONTAINING);
+        Example<Property> example = Example.of(probe, matcher);
+        return repository.findAll(example, pageable);
+    }
+
+    public Page<Property> findBySpecification(
+            String title, String city, BigDecimal minPrice, BigDecimal maxPrice,
+            Integer minBedrooms, Double minArea, Pageable pageable) {
+        var spec = PropertySpecification.filter(title, city, minPrice, maxPrice, minBedrooms, minArea);
+        return repository.findAll(spec, pageable);
     }
 
     @Cacheable(value = "properties", key = "#id")
     public Property findById(Long id) {
-        log.info("🔎 Fetching property {} from the database", id);
+        log.info("🔎 A consultar a base de dados para o imóvel ID: {}", id);
         return repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found"));
     }
@@ -39,6 +56,7 @@ public class PropertyService {
         return repository.save(request.toEntity());
     }
 
+    @CachePut(value = "properties", key = "#id")
     public Property update(Long id, PropertyRequest request) {
         if (!repository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found");
@@ -48,24 +66,11 @@ public class PropertyService {
         return repository.save(property);
     }
 
+    @CacheEvict(value = "properties", key = "#id")
     public void delete(Long id) {
         if (!repository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found");
         }
         repository.deleteById(id);
-    }
-
-    public Page<Property> findByExample(PropertyType type, String city, String neighborhood, Integer bedrooms, Pageable pageable) {
-        Property probe = new Property();
-        probe.setType(type);
-        probe.setCity(city);
-        probe.setNeighborhood(neighborhood);
-        probe.setBedrooms(bedrooms);
-
-        ExampleMatcher matcher = ExampleMatcher.matching()
-                .withIgnoreCase()
-                .withIgnoreNullValues();
-
-        return repository.findAll(Example.of(probe, matcher), pageable);
     }
 }

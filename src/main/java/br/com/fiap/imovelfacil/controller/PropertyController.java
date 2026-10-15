@@ -1,154 +1,142 @@
 package br.com.fiap.imovelfacil.controller;
 
-import java.math.BigDecimal;
-import java.net.URI;
-import java.util.List;
-
+import br.com.fiap.imovelfacil.assembler.PropertyModelAssembler;
 import br.com.fiap.imovelfacil.dto.PropertyRequest;
 import br.com.fiap.imovelfacil.model.Property;
 import br.com.fiap.imovelfacil.model.PropertyType;
-import br.com.fiap.imovelfacil.repository.PropertyRepository;
 import br.com.fiap.imovelfacil.service.PropertyService;
-import br.com.fiap.imovelfacil.specification.PropertySpecification;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.PagedResourcesAssembler;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
-
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+
+import java.math.BigDecimal;
+import java.net.URI;
 
 @RestController
 @RequestMapping("/properties")
 @RequiredArgsConstructor
-@Tag(name = "Properties", description = "Endpoints para gerenciamento e busca de imóveis")
+@Tag(name = "Properties", description = "Endpoints para a gestão e pesquisa de imóveis")
 public class PropertyController {
 
     private final PropertyService service;
-
-    private final PropertyRepository repository;
+    private final PropertyModelAssembler assembler;
+    private final PagedResourcesAssembler<Property> pagedResourcesAssembler;
 
     @GetMapping
+    @Operation(summary = "Listar todos os imóveis com paginação")
+    @ApiResponse(responseCode = "200", description = "Página de imóveis devolvida com sucesso")
     public ResponseEntity<PagedModel<EntityModel<Property>>> findAll(
-            @PageableDefault(page = 0, size = 10, sort = "id") Pageable pageable,
-            PagedResourcesAssembler<Property> assembler) {
+            @PageableDefault(page = 0, size = 10, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
 
-        Page<Property> properties = repository.findAll(pageable);
-
-        PagedModel<EntityModel<Property>> pagedModel = assembler.toModel(properties, property ->
-                EntityModel.of(property,
-                        linkTo(methodOn(PropertyController.class).findById(property.getId())).withSelfRel(),
-                        linkTo(methodOn(PropertyController.class).findAll(pageable, assembler)).withRel("properties")
-                )
-        );
-
+        Page<Property> properties = service.findAll(pageable);
+        PagedModel<EntityModel<Property>> pagedModel = pagedResourcesAssembler.toModel(properties, assembler);
         return ResponseEntity.ok(pagedModel);
     }
 
     @GetMapping("/example")
-    public List<Property> findByExample(
-            @RequestParam(required = false) PropertyType type,
-            @RequestParam(required = false) String city,
-            @RequestParam(required = false) String neighborhood,
-            @RequestParam(required = false) Integer bedrooms,
-            @RequestParam
-            @PageableDefault(size = 10, sort = "id") Pageable pageable
-    ) {
-        var spec = Specification
-                .where(PropertySpecification.titleContains(String.valueOf(type)))
-                .and(PropertySpecification.cityEquals(city))
-                .and(PropertySpecification.bedroomsGreaterThanOrEqual(bedrooms))
-                .and(PropertySpecification.neighborHood(neighborhood));
+    @Operation(summary = "Pesquisa de imóveis por Query by Example")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pesquisa efetuada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Parâmetros inválidos", content = @Content(schema = @Schema(example = "{\"error\": \"Invalid parameters\"}")))
+    })
+    public ResponseEntity<PagedModel<EntityModel<Property>>> findByExample(
+            @Parameter(description = "Tipo do imóvel") @RequestParam(required = false) PropertyType type,
+            @Parameter(description = "Cidade") @RequestParam(required = false) String city,
+            @Parameter(description = "Bairro") @RequestParam(required = false) String neighborhood,
+            @Parameter(description = "Número de quartos") @RequestParam(required = false) Integer bedrooms,
+            @PageableDefault(page = 0, size = 10, sort = "id") Pageable pageable) {
 
-        return repository.findAll(spec);
+        Property probe = new Property();
+        probe.setType(type);
+        probe.setCity(city);
+        probe.setNeighborhood(neighborhood);
+        probe.setBedrooms(bedrooms);
 
+        Page<Property> properties = service.findByExample(probe, pageable);
+        PagedModel<EntityModel<Property>> pagedModel = pagedResourcesAssembler.toModel(properties, assembler);
+        return ResponseEntity.ok(pagedModel);
     }
 
-    // TODO Diamante 03: GET /properties/search (Specification)
     @GetMapping("/search")
-    public ResponseEntity<PagedModel<EntityModel<Property>>> search(
-            @RequestParam(required = false) String city,
-            @RequestParam(required = false) BigDecimal minPrice,
-            @RequestParam(required = false) BigDecimal maxPrice,
-            @PageableDefault(page = 0, size = 10, sort = "id") Pageable pageable,
-            PagedResourcesAssembler<Property> assembler) {
+    @Operation(summary = "Pesquisa avançada de imóveis com Specifications")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pesquisa efetuada com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Parâmetros inválidos", content = @Content(schema = @Schema(example = "{\"error\": \"Invalid parameters\"}")))
+    })
+    public ResponseEntity<PagedModel<EntityModel<Property>>> findBySpecification(
+            @Parameter(description = "Título contém (ignora maiúsculas/minúsculas)") @RequestParam(required = false) String title,
+            @Parameter(description = "Cidade exata (ignora maiúsculas/minúsculas)") @RequestParam(required = false) String city,
+            @Parameter(description = "Preço mínimo") @RequestParam(required = false) BigDecimal minPrice,
+            @Parameter(description = "Preço máximo") @RequestParam(required = false) BigDecimal maxPrice,
+            @Parameter(description = "Quartos mínimos") @RequestParam(required = false) Integer minBedrooms,
+            @Parameter(description = "Área mínima") @RequestParam(required = false) Double minArea,
+            @PageableDefault(page = 0, size = 10, sort = "id") Pageable pageable) {
 
-        Specification<Property> citySpec = (root, query, builder) ->
-                (city == null || city.trim().isEmpty()) ? null :
-                        builder.like(builder.lower(root.get("city")), "%" + city.toLowerCase() + "%");
-
-        Specification<Property> minPriceSpec = (root, query, builder) ->
-                (minPrice == null) ? null :
-                        builder.greaterThanOrEqualTo(root.get("price"), minPrice);
-
-        Specification<Property> maxPriceSpec = (root, query, builder) ->
-                (maxPrice == null) ? null :
-                        builder.lessThanOrEqualTo(root.get("price"), maxPrice);
-
-        Specification<Property> spec = Specification.where(citySpec)
-                .and(minPriceSpec)
-                .and(maxPriceSpec);
-
-        Page<Property> properties = repository.findAll(spec, pageable);
-
-        PagedModel<EntityModel<Property>> pagedModel = assembler.toModel(properties, property ->
-                EntityModel.of(property,
-                        linkTo(methodOn(PropertyController.class).findById(property.getId())).withSelfRel(),
-                        linkTo(methodOn(PropertyController.class).findAll(null, null)).withRel("properties")
-                )
-        );
-
+        Page<Property> properties = service.findBySpecification(title, city, minPrice, maxPrice, minBedrooms, minArea, pageable);
+        PagedModel<EntityModel<Property>> pagedModel = pagedResourcesAssembler.toModel(properties, assembler);
         return ResponseEntity.ok(pagedModel);
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Procurar imóvel por ID (Com cache ativo)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Imóvel encontrado"),
+            @ApiResponse(responseCode = "404", description = "Imóvel não encontrado", content = @Content(schema = @Schema(example = "{\"error\": \"Property not found\"}")))
+    })
     public ResponseEntity<EntityModel<Property>> findById(@PathVariable Long id) {
         Property property = service.findById(id);
-
-        EntityModel<Property> entityModel = EntityModel.of(property,
-                linkTo(methodOn(PropertyController.class).findById(id)).withSelfRel(),
-                linkTo(methodOn(PropertyController.class).findAll(null, null)).withRel("properties")
-        );
-
-        return ResponseEntity.ok(entityModel);
+        return ResponseEntity.ok(assembler.toModel(property));
     }
 
     @PostMapping
-    public ResponseEntity<Property> create(@RequestBody @Valid PropertyRequest request) {
+    @Operation(summary = "Criar um novo imóvel")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Imóvel criado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Erro de validação", content = @Content(schema = @Schema(example = "{\"error\": \"Validation error\"}")))
+    })
+    public ResponseEntity<EntityModel<Property>> create(@RequestBody @Valid PropertyRequest request) {
         Property property = service.create(request);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(property.getId())
                 .toUri();
-        return ResponseEntity.created(location).body(property);
+        return ResponseEntity.created(location).body(assembler.toModel(property));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Property> update(@PathVariable Long id, @RequestBody @Valid PropertyRequest request) {
-        Property updatedProperty = service.update(id, request);
-        return ResponseEntity.ok(updatedProperty);
+    @Operation(summary = "Atualizar um imóvel existente")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Imóvel atualizado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+            @ApiResponse(responseCode = "404", description = "Imóvel não encontrado", content = @Content(schema = @Schema(example = "{\"error\": \"Property not found\"}")))
+    })
+    public ResponseEntity<EntityModel<Property>> update(@PathVariable Long id, @RequestBody @Valid PropertyRequest request) {
+        Property property = service.update(id, request);
+        return ResponseEntity.ok(assembler.toModel(property));
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Eliminar um imóvel")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Imóvel eliminado com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Imóvel não encontrado", content = @Content(schema = @Schema(example = "{\"error\": \"Property not found\"}")))
+    })
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
